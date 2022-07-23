@@ -1,0 +1,16 @@
+total 2896
+-rw-r--r-- 1 philip staff      42 Jul 23 07:07 ,a
+-rw-r--r-- 1 philip staff    1076 Jul 23 07:01 LICENSE
+-rw-r--r-- 1 philip staff     353 Jul 23 07:11 Makefile
+-rw-r--r-- 1 philip staff     502 Jul 23 07:01 README.md
+-rwxr-xr-x 1 philip staff 2920256 Jul 23 07:11 aes-tool
+-rw-r--r-- 1 philip staff     838 Jul 23 07:08 go.mod
+-rw-r--r-- 1 philip staff    3889 Jul 23 07:08 go.sum
+-rw-r--r-- 1 philip staff    2727 Jul 23 07:09 main.go
+drwxr-xr-x 3 philip staff      96 Jul 23 07:11 out
+drwxr-xr-x 2 philip staff      64 Jul 23 07:11 ref
+-rw-r--r-- 1 philip staff      64 Jul 23 07:01 t1
+-rw-r--r-- 1 philip staff     682 Jul 23 07:01 t2
+-rw-r--r-- 1 philip staff     682 Jul 23 07:01 t2.txt
+drwxr-xr-x 3 philip staff      96 Jul 23 07:11 testdata
+-rw-r--r-- 1 philip staff    2438 Jul 23 07:01 todo.1

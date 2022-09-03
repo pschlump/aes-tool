@@ -41,12 +41,18 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	if *encode != "" || *decode == "" {
+		fmt.Printf("Failed to specify --encode or --decode flag.  Must have one of them\n")
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	var keyString string
 	var err error
+	var out *os.File
 
 	if *password == "" || *password == "-" {
-		keyString, err = readPassword()
+		keyString, err = ReadPassword(*output != "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s on reading password\n", err)
 			os.Exit(1)
@@ -57,15 +63,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: unable to read password input file %s, error:%s\n", *password, err)
 			os.Exit(1)
 		}
-		keyString = string(buf)
+		keyString = strings.Trim(string(buf), "\n\r \t")
 	}
 
-	out, err := filelib.Fopen(*output, "w")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to open %s for output: %s\n", *output, err)
-		os.Exit(1)
+	out = os.Stdout
+	if *output != "" {
+		out, err = filelib.Fopen(*output, "w")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to open %s for output: %s\n", *output, err)
+			os.Exit(1)
+		}
+		defer out.Close()
 	}
-	defer out.Close()
 
 	if *encode != "" {
 
@@ -102,9 +111,11 @@ func main() {
 	}
 }
 
-func readPassword() (password string, err error) {
+func ReadPassword(prompt bool) (password string, err error) {
 
-	fmt.Print("Enter Password: ")
+	if prompt {
+		fmt.Print("Enter Password: ")
+	}
 	if runtime.GOOS == "windows" {
 
 		reader := bufio.NewReader(os.Stdin)

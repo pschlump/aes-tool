@@ -21,3 +21,12 @@ install:
 	rm -f ~/bin/aes-tool
 	( cd ~/bin ; ln -s ../go/src/github.com/pschlump/aes-tool/aes-tool . )
 
+linux:
+	GOOS=linux GOARCH=amd64 go build -o aes-tool_linux
+
+deploy:
+	scp aes-tool_linux philip@45.79.53.54:/home/philip/tmp
+
+test002:
+	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc
+

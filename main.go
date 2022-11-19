@@ -1,5 +1,14 @@
 package main
 
+// TODO - allow use of named pipe.
+// https://github.com/nknorg/encrypted-stream
+// https://tutorialedge.net/golang/go-encrypt-decrypt-aes-tutorial/
+//
+// mac
+//   $ mkfifo Nmae
+
+// TODO - implement log rotation
+
 import (
 	"bufio"
 	"flag"
@@ -17,6 +26,7 @@ import (
 	"golang.org/x/term"
 )
 
+var pipeInput = flag.Bool("pipe-input", false, "Input is a named pipe")
 var encode = flag.String("encode", "", "file to encode")
 var decode = flag.String("decode", "", "file to encode")
 var output = flag.String("output", "", "file to encode")
@@ -57,6 +67,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s on reading password\n", err)
 			os.Exit(1)
 		}
+	} else if len(*password) > 10 && strings.HasPrefix(*password, "--env$") {
+		p := os.Getenv((*password)[len("--env$"):])
+		password = &p
 	} else {
 		buf, err := ioutil.ReadFile(*password)
 		if err != nil {
@@ -76,7 +89,10 @@ func main() {
 		defer out.Close()
 	}
 
-	if *encode != "" {
+	if *pipeInput && *encode != "" {
+		// TODO -----------------------------------------------------------------------------------------------------------------------
+
+	} else if *encode != "" {
 
 		buf, err := ioutil.ReadFile(*encode)
 		if err != nil {

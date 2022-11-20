@@ -30,3 +30,11 @@ deploy:
 test002:
 	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc
 
+
+test003:
+	go build
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "!env!SENDGRID_API_KEY" &
+	ls -l ~/ >t1/data.txt
+	ls -l ~/ >t1/data.txt
+
+

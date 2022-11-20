@@ -28,8 +28,8 @@ import (
 
 var pipeInput = flag.Bool("pipe-input", false, "Input is a named pipe")
 var encode = flag.String("encode", "", "file to encode")
-var decode = flag.String("decode", "", "file to encode")
-var output = flag.String("output", "", "file to encode")
+var decode = flag.String("decode", "", "file to decode")
+var output = flag.String("output", "", "file to send output to")
 var password = flag.String("password", "", "file read password from")
 var help = flag.Bool("help", false, "print out usage message")
 
@@ -51,7 +51,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *encode != "" || *decode == "" {
+	if *encode == "" && *decode == "" {
 		fmt.Printf("Failed to specify --encode or --decode flag.  Must have one of them\n")
 		flag.Usage()
 		os.Exit(1)
@@ -67,8 +67,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s on reading password\n", err)
 			os.Exit(1)
 		}
-	} else if len(*password) > 10 && strings.HasPrefix(*password, "--env$") {
-		p := os.Getenv((*password)[len("--env$"):])
+	} else if len(*password) > 10 && strings.HasPrefix(*password, "!env!") {
+		p := os.Getenv((*password)[len("!env!"):])
+		// fmt.Printf("got ->%s<-\n", p)
 		password = &p
 	} else {
 		buf, err := ioutil.ReadFile(*password)
@@ -80,7 +81,7 @@ func main() {
 	}
 
 	out = os.Stdout
-	if *output != "" {
+	if *output != "" && !*pipeInput {
 		out, err = filelib.Fopen(*output, "w")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to open %s for output: %s\n", *output, err)
@@ -91,6 +92,9 @@ func main() {
 
 	if *pipeInput && *encode != "" {
 		// TODO -----------------------------------------------------------------------------------------------------------------------
+
+		//				   In(pipe) Out(encrypted)
+		ReadPipeForever(*encode, *output, *password)
 
 	} else if *encode != "" {
 

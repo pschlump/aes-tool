@@ -37,18 +37,29 @@ test002: export AES_TOOL_PASSWORD = "Humpty Dumpty"
 test002: setup_test
 	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc --password "#env#AES_TOOL_PASSWORD" 
 
+test003: export AES_TOOL_PASSWORD = "Humpty Dumpty"
+
 test003: setup_test
 	./create-named-pipe.sh ./t1/data.txt
-	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" &
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" \
+		--debug-flag "x-echo-password-env,x-dump-debug-flag" \
+		&
 	ls -l ./testdata | tee ./ref/save.out >t1/data.txt
 	ls -l ./testdata >t1/data.txt
 	ls -l ./testdata >t1/data.txt
 	ls -l ./testdata >t1/data.txt
-	./aes-tool --decode ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" >t1/decrypted.out
+	./aes-tool --decode ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" \
+		--debug-flag "x-echo-password-env,x-dump-debug-flag" \
+		>t1/decrypted.out 
 	cat ./ref/save.out ./ref/save.out ./ref/save.out ./ref/save.out >./ref/all.out
 	diff ./ref/all.out ./t1/decrypted.out
 	@echo PASS | color-cat -c green
 
+x: export AES_TOOL_PASSWORD = "Humpty Dumpty"
+
+x:
+	go build
+	./aes-tool --decode ./out/goo0.enc --password "#env#AES_TOOL_PASSWORD" >t1/decrypted.out
 
 
 # Test of setting environment variables in Make

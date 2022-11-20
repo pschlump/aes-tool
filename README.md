@@ -5,6 +5,8 @@
 This tool is specifically designed to work with log files and other snippets
 that have been encrypted. 
 
+An example of an AES encrypted chunk of data is an encrypted QR code.
+
 
 <--
 var encode = flag.String("encode", "", "file to encode")

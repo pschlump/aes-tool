@@ -1,4 +1,5 @@
 aes-tool
+.bk3
 ,*
 ./t1
 ./t2
@@ -6,6 +7,7 @@ aes-tool
 todo.1
 aes-tool_linux
 .bak
+.bak2
 out/goo3.enc
 plan.1
 t1/data.txt.enc

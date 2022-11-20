@@ -33,6 +33,7 @@ var decode = flag.String("decode", "", "file to decode")
 var output = flag.String("output", "", "file to send output to")
 var password = flag.String("password", "", "file read password from")
 var help = flag.Bool("help", false, "print out usage message")
+var debugFlag = flag.String("debug-flag", "", "enable debug flags")
 
 func main() {
 	flag.Usage = func() {
@@ -52,6 +53,13 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	if *debugFlag != "" {
+		for _, vv := range strings.Split(*debugFlag, ",") {
+			DbOn[vv] = true
+		}
+	}
+
 	if *encode == "" && *decode == "" {
 		fmt.Printf("Failed to specify --encode or --decode flag.  Must have one of them\n")
 		flag.Usage()
@@ -62,6 +70,9 @@ func main() {
 	var err error
 	var out *os.File
 
+	// -------------------------------------------------------------------------------------------------
+	// Get Password / Passphrase
+	// -------------------------------------------------------------------------------------------------
 	if *password == "" || *password == "-" {
 		keyString, err = ReadPassword(*output != "")
 		if err != nil {
@@ -70,8 +81,10 @@ func main() {
 		}
 	} else if len(*password) > 10 && strings.HasPrefix(*password, "#env#") {
 		p := os.Getenv((*password)[len("#env#"):])
-		// fmt.Printf("got ->%s<-\n", p)
-		password = &p
+		if DbOn["echo-password-env"] {
+			fmt.Fprintf(os.Stderr, "password = (from env) ->%s<-\n", p)
+		}
+		keyString = p
 	} else {
 		buf, err := ioutil.ReadFile(*password)
 		if err != nil {
@@ -80,7 +93,17 @@ func main() {
 		}
 		keyString = strings.Trim(string(buf), "\n\r \t")
 	}
+	// 	dbgo.Fprintf(os.Stderr, "%(red)->%s<-\n", keyString)
 
+	if DbOn["dump-debug-flag"] {
+		for i, v := range DbOn {
+			fmt.Fprintf(os.Stderr, "DbOn[%v] = %v\n", i, v)
+		}
+	}
+
+	// -------------------------------------------------------------------------------------------------
+	// Setup output file for non-pipe work.
+	// -------------------------------------------------------------------------------------------------
 	out = os.Stdout
 	if *output != "" && !*pipeInput {
 		out, err = filelib.Fopen(*output, "w")
@@ -91,10 +114,13 @@ func main() {
 		defer out.Close()
 	}
 
+	// -------------------------------------------------------------------------------------------------
+	// Do encryption/decrypion work
+	// -------------------------------------------------------------------------------------------------
 	if *pipeInput && *encode != "" {
 
-		//				   In(pipe) Out(encrypted)
-		ReadPipeForever(*encode, *output, *password)
+		//		        In(pipe) Out(encrypted)
+		ReadPipeForever(*encode, *output, keyString)
 
 	} else if *encode != "" {
 
@@ -117,48 +143,49 @@ func main() {
 
 	} else if *decode != "" {
 
-		// TODO -----------------------------------------------------------------------------------------------------------------------
+		// OLD Code : the way this used to work
+		//	encContent, err := ioutil.ReadFile(*decode)
+		//	if err != nil {
+		//		os.Exit(1)
+		//	}
+		//	content, err := enc.DataDecrypt(string(encContent), keyString)
+		//	if err != nil {
+		//		fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
+		//		os.Exit(1)
+		//	}
+		//	fmt.Fprintf(out, "%s", content)
 
-		oldCode := false
-		if oldCode {
-			encContent, err := ioutil.ReadFile(*decode)
-			if err != nil {
-				os.Exit(1)
-			}
-			content, err := enc.DataDecrypt(string(encContent), keyString)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
-				os.Exit(1)
-			}
-			fmt.Fprintf(out, "%s", content)
-		} else {
-			ifp, err := os.Open(*decode)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Unable to open %s for input: %s\n", *decode, err)
-				os.Exit(1)
-			}
-			defer ifp.Close()
+		ifp, err := os.Open(*decode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to open %s for input: %s\n", *decode, err)
+			os.Exit(1)
+		}
+		defer ifp.Close()
 
-			scanner := bufio.NewScanner(ifp)
-			line_no := 0
-			for scanner.Scan() {
-				line_no++
-				if DbOn["echo-raw-input"] {
-					fmt.Fprintf(os.Stderr, "%5d:%s\n", line_no, scanner.Text())
-				}
-				//				content, err := enc.DataDecrypt(scanner.Text(), keyString)
-				//				if err != nil {
-				//					fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
-				//					os.Exit(1)
-				//				}
-				content := DecBlocks([]byte(scanner.Text()), keyString)
+		scanner := bufio.NewScanner(ifp)
+		line_no := 0
+		for scanner.Scan() {
+			line_no++
+			if DbOn["echo-raw-input"] {
+				fmt.Fprintf(os.Stderr, "%5d:->%s<-\n", line_no, scanner.Text())
+			}
+
+			//content, err := DecBlocks([]byte(scanner.Text()), keyString)
+			//if err != nil {
+			//	fmt.Fprintf(os.Stderr, "Falined on line %s with %s\n", line_no, err)
+			//} else {
+			//	fmt.Fprintf(out, "%s", content)
+			//}
+			content, err := /*enc.*/ DataDecrypt(scanner.Text(), keyString)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Unable to decrypt %s at line %d Error: %s\n", *output, line_no, err)
+			} else {
 				fmt.Fprintf(out, "%s", content)
-				// fmt.Fprintf(os.Stderr, "---->%s<----\n", content)
 			}
+		}
 
-			if err := scanner.Err(); err != nil {
-				log.Fatal(err)
-			}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
 		}
 	}
 }

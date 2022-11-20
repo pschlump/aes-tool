@@ -1,7 +1,9 @@
 #!/bin/bash
 
+pkill aes-tool
+
 if ls -l "$1" >/dev/null ; then
-	if ls -l "$1" | grep '^p' ; >/dev/null then
+	if ls -l "$1" | grep '^p' >/dev/null ; then
 		:
 	else
 		echo "not pipe"

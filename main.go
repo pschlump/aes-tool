@@ -16,6 +16,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/ioutil"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -67,8 +68,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s on reading password\n", err)
 			os.Exit(1)
 		}
-	} else if len(*password) > 10 && strings.HasPrefix(*password, "!env!") {
-		p := os.Getenv((*password)[len("!env!"):])
+	} else if len(*password) > 10 && strings.HasPrefix(*password, "#env#") {
+		p := os.Getenv((*password)[len("#env#"):])
 		// fmt.Printf("got ->%s<-\n", p)
 		password = &p
 	} else {
@@ -91,7 +92,6 @@ func main() {
 	}
 
 	if *pipeInput && *encode != "" {
-		// TODO -----------------------------------------------------------------------------------------------------------------------
 
 		//				   In(pipe) Out(encrypted)
 		ReadPipeForever(*encode, *output, *password)
@@ -117,17 +117,49 @@ func main() {
 
 	} else if *decode != "" {
 
-		encContent, err := ioutil.ReadFile(*decode)
-		if err != nil {
-			os.Exit(1)
-		}
-		content, err := enc.DataDecrypt(string(encContent), keyString)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
-			os.Exit(1)
-		}
-		fmt.Fprintf(out, "%s", content)
+		// TODO -----------------------------------------------------------------------------------------------------------------------
 
+		oldCode := false
+		if oldCode {
+			encContent, err := ioutil.ReadFile(*decode)
+			if err != nil {
+				os.Exit(1)
+			}
+			content, err := enc.DataDecrypt(string(encContent), keyString)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(out, "%s", content)
+		} else {
+			ifp, err := os.Open(*decode)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Unable to open %s for input: %s\n", *decode, err)
+				os.Exit(1)
+			}
+			defer ifp.Close()
+
+			scanner := bufio.NewScanner(ifp)
+			line_no := 0
+			for scanner.Scan() {
+				line_no++
+				if DbOn["echo-raw-input"] {
+					fmt.Fprintf(os.Stderr, "%5d:%s\n", line_no, scanner.Text())
+				}
+				//				content, err := enc.DataDecrypt(scanner.Text(), keyString)
+				//				if err != nil {
+				//					fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
+				//					os.Exit(1)
+				//				}
+				content := DecBlocks([]byte(scanner.Text()), keyString)
+				fmt.Fprintf(out, "%s", content)
+				// fmt.Fprintf(os.Stderr, "---->%s<----\n", content)
+			}
+
+			if err := scanner.Err(); err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 }
 

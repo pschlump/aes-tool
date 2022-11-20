@@ -9,14 +9,14 @@ test: setup_test test001 test002 test003
 
 setup_test:
 	go build
-	mkdir -p ./out ./ref
+	mkdir -p ./out ./ref ./t1 ./aes-tool-log
 
 test001: export AES_TOOL_PASSWORD = "Humpty Dumpty"
 
 test001: setup_test
-	./aes-tool --encode ./testdata/t2 --output ./out/t2.enc --password "!env!AES_TOOL_PASSWORD" 
+	./aes-tool --encode ./testdata/t2 --output ./out/t2.enc --password "#env#AES_TOOL_PASSWORD" 
 	echo ""
-	./aes-tool --decode ./out/t2.enc --output ./out/t2.txt --password "!env!AES_TOOL_PASSWORD" 
+	./aes-tool --decode ./out/t2.enc --output ./out/t2.txt --password "#env#AES_TOOL_PASSWORD" 
 	echo ""
 	diff testdata/t2 out/t2.txt
 
@@ -35,15 +35,19 @@ deploy:
 test002: export AES_TOOL_PASSWORD = "Humpty Dumpty"
 
 test002: setup_test
-	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc --password "!env!AES_TOOL_PASSWORD" 
+	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc --password "#env#AES_TOOL_PASSWORD" 
 
 test003: setup_test
 	./create-named-pipe.sh ./t1/data.txt
-	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "!env!AES_TOOL_PASSWORD" &
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" &
+	ls -l ./testdata | tee ./ref/save.out >t1/data.txt
 	ls -l ./testdata >t1/data.txt
 	ls -l ./testdata >t1/data.txt
 	ls -l ./testdata >t1/data.txt
-	ls -l ./testdata >t1/data.txt
+	./aes-tool --decode ./out/goo3.enc --password "#env#AES_TOOL_PASSWORD" >t1/decrypted.out
+	cat ./ref/save.out ./ref/save.out ./ref/save.out ./ref/save.out >./ref/all.out
+	diff ./ref/all.out ./t1/decrypted.out
+	@echo PASS | color-cat -c green
 
 
 

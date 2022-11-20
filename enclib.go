@@ -34,7 +34,8 @@ func EncBlocks(text []byte, password string) string {
 	// - https://en.wikipedia.org/wiki/Galois/Counter_Mode
 	gcm, err := cipher.NewGCM(c)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Unable to create NewGCM: %s\n", err)
+		os.Exit(1)
 	}
 
 	// creates a new byte array the size of the nonce
@@ -42,7 +43,8 @@ func EncBlocks(text []byte, password string) string {
 	nonce := make([]byte, gcm.NonceSize())
 	// populate our nonce with a random sequence
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Unable to read data: %s\n", err)
+		os.Exit(1)
 	}
 
 	// here we encrypt our text using the Seal function
@@ -76,29 +78,43 @@ func DecBlocks(ciphertext []byte, password string) string {
 
 	ciphertext, err := base64.StdEncoding.DecodeString(line)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Unable to base64 decode: %s\n", err)
+		os.Exit(1)
 	}
 
 	c, err := aes.NewCipher(key)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Unable to create NewCiphter: %s\n", err)
+		os.Exit(1)
 	}
 
 	gcm, err := cipher.NewGCM(c)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Unable to create NewGCM: %s\n", err)
+		os.Exit(1)
 	}
 
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "ciphertext shorter than nonce, invalid length: %s\n", err)
+		os.Exit(1)
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Invalid Unencrypt - GCM did not match: %s\n", err)
+		os.Exit(1)
 	}
+
+	// !! note !! this may not work with unicode characters -- have not tested it.
+	i := 0
+	for ; i < len(plaintext); i++ {
+		if plaintext[i] == 0 {
+			break
+		}
+	}
+	plaintext = plaintext[0:i]
 
 	return string(plaintext)
 

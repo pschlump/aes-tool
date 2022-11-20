@@ -21,7 +21,7 @@ Decrypt and send output to stdout.  Take the password from the environment
 variable `ENC_AES_TOOL`.
 
 ```
-$ aes-tool --decode file.encrypted --password "!env!ENC_AES_TOOL"
+$ aes-tool --decode file.encrypted --password "#env#ENC_AES_TOOL"
 ```
 
 Decrypt and send output to a file.   Prompt for the password.
@@ -34,7 +34,7 @@ Read a named pipe for data and encrypt it.  In this form it will reaa in blocks
 forever and send encrypted data to the output.
 
 ```
-$ aes-tool --encode ./t1/data.txt --pipe-input --output ./out/encrypted-log.enc --password "!env!SENDGRID_API_KEY" &
+$ aes-tool --encode ./t1/data.txt --pipe-input --output ./out/encrypted-log.enc --password "#env#SENDGRID_API_KEY" &
 ```
 
 

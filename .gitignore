@@ -10,3 +10,6 @@ out/goo3.enc
 plan.1
 t1/data.txt.enc
 t1/logenc
+ref/all.out
+ref/save.out
+t1/decrypted.out

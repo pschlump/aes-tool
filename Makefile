@@ -3,14 +3,17 @@ all:
 	go build
 
 
-test: test001 test002 test003
+.PHONEY: test setup_test test001 test002 test003
+test: setup_test test001 test002 test003
 	@echo PASS
+
+setup_test:
+	go build
+	mkdir -p ./out ./ref
 
 test001: export AES_TOOL_PASSWORD = "Humpty Dumpty"
 
-test001:
-	go build
-	mkdir -p ./out ./ref
+test001: setup_test
 	./aes-tool --encode ./testdata/t2 --output ./out/t2.enc --password "!env!AES_TOOL_PASSWORD" 
 	echo ""
 	./aes-tool --decode ./out/t2.enc --output ./out/t2.txt --password "!env!AES_TOOL_PASSWORD" 
@@ -31,12 +34,11 @@ deploy:
 
 test002: export AES_TOOL_PASSWORD = "Humpty Dumpty"
 
-test002:
+test002: setup_test
 	./aes-tool --encode ./testdata/eek2.sh --output ./out/eek2.enc --password "!env!AES_TOOL_PASSWORD" 
 
-test003:
-	go build
-	mkdir -p ./out ./ref
+test003: setup_test
+	./create-named-pipe.sh ./t1/data.txt
 	./aes-tool --encode ./t1/data.txt --pipe-input --output ./out/goo3.enc --password "!env!AES_TOOL_PASSWORD" &
 	ls -l ./testdata >t1/data.txt
 	ls -l ./testdata >t1/data.txt

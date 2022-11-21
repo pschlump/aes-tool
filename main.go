@@ -60,6 +60,7 @@ var tokenCountdownMux *sync.Mutex
 var tokenTimeLeft int
 var n_tick int = 0
 var hourlyTimeLeft int = 3600
+var httpServerList []*http.Server
 
 func init() {
 	ch = make(chan string, 1)
@@ -160,31 +161,60 @@ func main() {
 	// -------------------------------------------------------------------------------------------------
 	if *controlInterface != "" {
 		dbgo.Fprintf(os.Stderr, "%(green)Control Interface Enabled. Listing at http://%s\n", *controlInterface)
+
+		// ------------------------------------------------------------------------------
+		// Main Processing
+		// ------------------------------------------------------------------------------
+		go OneSecondDispatch()
+
+		// ticker on channel - send once a second
+		Start1SecTimer()
+
+		// ------------------------------------------------------------------------------
+		// Setup signal capture
+		// ------------------------------------------------------------------------------
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt)
+
 		go func() {
+			mux := http.NewServeMux()
 
-			// ------------------------------------------------------------------------------
-			// Main Processing
-			// ------------------------------------------------------------------------------
-			// go TimedDispatch()
-			go OneSecondDispatch()
+			mux.HandleFunc("/api/status", RespHandlerStatus)
+			mux.HandleFunc("/api/v1/status", RespHandlerStatus)
+			mux.HandleFunc("/api/v1/exit-server", RespHandleExitServer)
+			mux.HandleFunc("/api/v1/rotate-logs", RespHandlerRotateLogs)
+			mux.Handle("/", http.FileServer(http.Dir(*Dir)))
 
-			// ticker on channel - send once a minute
-			Start1SecTimer()
+			httpServer := &http.Server{
+				Addr:              *controlInterface,
+				Handler:           mux,
+				ReadTimeout:       5 * time.Second,
+				WriteTimeout:      5 * time.Second,
+				IdleTimeout:       90 * time.Second,
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			httpServerList = append(httpServerList, httpServer)
 
-			// ------------------------------------------------------------------------------
-			// Setup signal capture
-			// ------------------------------------------------------------------------------
-			stop := make(chan os.Signal, 1)
-			signal.Notify(stop, os.Interrupt)
-
-			http.HandleFunc("/api/status", RespHandlerStatus)
-			http.HandleFunc("/api/v1/status", RespHandlerStatus)
-			http.HandleFunc("/api/v1/exit-server", RespHandleExitServer)
-			http.HandleFunc("/api/v1/rotate-logs", RespHandlerRotateLogs)
-			http.Handle("/", http.FileServer(http.Dir(*Dir)))
-
-			log.Fatal(http.ListenAndServe(*controlInterface, nil))
+			log.Fatal(httpServer.ListenAndServe())
 		}()
+
+		// ------------------------------------------------------------------------------
+		// Catch signals from [Control-C]
+		// ------------------------------------------------------------------------------
+		select {
+		case <-stop:
+			fmt.Fprintf(os.Stderr, "\nShutting down the server... Received OS Signal...\n")
+			// fmt.Fprintf(logFilePtr, "\nShutting down the server... Received OS Signal...\n")
+			for _, httpServer := range httpServerList {
+				ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime*time.Second)
+				defer cancel()
+				err := httpServer.Shutdown(ctx)
+				if err != nil {
+					fmt.Printf("Error on shutdown: [%s]\n", err)
+				}
+			}
+		}
+
 	}
 
 	// -------------------------------------------------------------------------------------------------
@@ -216,18 +246,6 @@ func main() {
 
 	} else if *decode != "" {
 
-		// OLD Code : the way this used to work
-		//	encContent, err := ioutil.ReadFile(*decode)
-		//	if err != nil {
-		//		os.Exit(1)
-		//	}
-		//	content, err := enc.DataDecrypt(string(encContent), keyString)
-		//	if err != nil {
-		//		fmt.Fprintf(os.Stderr, "Unable to decrypt %s Error: %s\n", *output, err)
-		//		os.Exit(1)
-		//	}
-		//	fmt.Fprintf(out, "%s", content)
-
 		ifp, err := os.Open(*decode)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to open %s for input: %s\n", *decode, err)
@@ -243,12 +261,6 @@ func main() {
 				fmt.Fprintf(os.Stderr, "%5d:->%s<-\n", line_no, scanner.Text())
 			}
 
-			//content, err := DecBlocks([]byte(scanner.Text()), keyString)
-			//if err != nil {
-			//	fmt.Fprintf(os.Stderr, "Falined on line %s with %s\n", line_no, err)
-			//} else {
-			//	fmt.Fprintf(out, "%s", content)
-			//}
 			content, err := /*enc.*/ DataDecrypt(scanner.Text(), keyString)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Unable to decrypt %s at line %d Error: %s\n", *output, line_no, err)
@@ -319,13 +331,12 @@ func RespHandleExitServer(www http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(os.Stderr, "\nShutting down the server... Received /exit-server?auth_key=...\n")
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime*time.Second)
 		defer cancel()
-		_ = ctx
-		/*xyzzy
-		err := httpServer.Shutdown(ctx)
-		if err != nil {
-			fmt.Printf("Error on shutdown: [%s]\n", err)
+		for _, httpServer := range httpServerList {
+			err := httpServer.Shutdown(ctx)
+			if err != nil {
+				fmt.Printf("Error on shutdown: [%s]\n", err)
+			}
 		}
-		*/
 	}()
 }
 

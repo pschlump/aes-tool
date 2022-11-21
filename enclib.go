@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/pschlump/dbgo"
-	"github.com/pschlump/filelib"
 )
 
 //func EncBlocks(text []byte, password string) string {
@@ -124,8 +123,6 @@ func DecBlocks(ciphertext []byte, password string) (s string, err error) {
 
 const BlockSize int = 1024
 
-var outputFilePtr *os.File = os.Stdout
-
 var DbOn map[string]bool = make(map[string]bool)
 
 func ReadNamedPipeToEOF(inputFileName, password string) {
@@ -146,12 +143,12 @@ func ReadNamedPipeToEOF(inputFileName, password string) {
 			fmt.Printf("Read chunk %d\n", ii)
 		}
 		if _, err = reader.Read(part); err != nil {
-			// fmt.Printf("err for break: %s\n", err)
 			break
 		}
-		// s := EncBlocks(part, password)
 		s, _ := DataEncrypt(part, password)
+		outputMux.Lock()
 		fmt.Fprintf(outputFilePtr, "%s\n", s)
+		outputMux.Unlock()
 	}
 	if err != io.EOF {
 		log.Fatal("Error Reading ", inputFileName, ": ", err)
@@ -161,12 +158,7 @@ func ReadNamedPipeToEOF(inputFileName, password string) {
 
 }
 
-func ReadPipeForever(inputFileName, outputFileName, password string) (err error) {
-	outputFilePtr, err = filelib.Fopen(outputFileName, "w")
-	if err != nil {
-		fmt.Printf("Unable to open %s for output: %s\n", outputFileName, err)
-		return
-	}
+func ReadPipeForever(inputFileName, password string) (err error) {
 	for {
 		ReadNamedPipeToEOF(inputFileName, password)
 	}
@@ -236,9 +228,6 @@ func fix0Instring(ee string) (rv string) {
 	return
 }
 
-const db8 = false
-const db11 = false
-
 func HashPassword(a ...string) []byte {
 	h := sha256.New()
 	for _, z := range a {
@@ -291,3 +280,8 @@ func DataEncrypt(plaintext []byte, keyString string) (encryptedString string, er
 	return so, nil
 	// return fmt.Sprintf("%x", ciphertext), nil // xyzzy - change to base 64
 }
+
+const db8 = false
+const db11 = false
+
+/* vim: set noai ts=4 sw=4: */

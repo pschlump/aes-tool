@@ -51,10 +51,15 @@ var debugFlag = flag.String("debug-flag", "", "enable debug flags")
 var controlInterface = flag.String("control-interface", "", "turn on HTTP control interface")
 var Dir = flag.String("dir", "./www", "directory to server static files from")
 
+var RotateHours = flag.Int("rotate-hours", 24, "how often to roate log files")
+var RotateTemplate = flag.String("rotate-template", "./t1/logfile.%{timestamp%}.log.enc", "Template for output file name")
+var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
+
 // file-pattern/name-template for generating new log files during rotation.
 // 		Date Time - in order
 
 // script to run to backup/cleanup files after rotation.
+//	./bin/backup-lo9g-files.sh "Path-To-Log-Files", "pattern-to-match"
 
 var ch chan string = make(chan string, 1)
 var timeout chan string = make(chan string, 2)
@@ -62,8 +67,9 @@ var tokenTimeLeft int = 1
 var n_tick int = 0
 var hourlyTimeLeft int = 3600
 var httpServerList []*http.Server
-var out *os.File = os.Stdout
+var outputFilePtr *os.File = os.Stdout
 var tokenCountdownMux *sync.Mutex = &sync.Mutex{}
+var outputMux *sync.Mutex = &sync.Mutex{}
 
 func main() {
 	flag.Usage = func() {
@@ -95,6 +101,8 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	nHoursLeft = *RotateHours
 
 	// -------------------------------------------------------------------------------------------------
 	// save pidfile.
@@ -140,13 +148,17 @@ func main() {
 	// -------------------------------------------------------------------------------------------------
 	// Setup output file for non-pipe work.
 	// -------------------------------------------------------------------------------------------------
-	if *output != "" && !*pipeInput {
-		out, err = filelib.Fopen(*output, "w")
+	// if *output != "" && !*pipeInput {
+	if *output != "" {
+		outputMux.Lock()
+		outputFilePtr, err = filelib.Fopen(*output, "w")
 		if err != nil {
+			outputMux.Unlock()
 			fmt.Fprintf(os.Stderr, "Unable to open %s for output: %s\n", *output, err)
 			os.Exit(1)
 		}
-		defer out.Close()
+		outputMux.Unlock()
+		defer outputFilePtr.Close()
 	}
 
 	// -------------------------------------------------------------------------------------------------
@@ -216,7 +228,7 @@ func main() {
 	if *pipeInput && *encode != "" {
 
 		//		        In(pipe) Out(encrypted)
-		ReadPipeForever(*encode, *output, keyString)
+		ReadPipeForever(*encode, keyString)
 
 	} else if *encode != "" {
 
@@ -235,7 +247,9 @@ func main() {
 		}
 
 		// Output encrypted data
-		out.WriteString(encContent)
+		outputMux.Lock()
+		outputFilePtr.WriteString(encContent)
+		outputMux.Unlock()
 
 	} else if *decode != "" {
 
@@ -258,7 +272,9 @@ func main() {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Unable to decrypt %s at line %d Error: %s\n", *output, line_no, err)
 			} else {
-				fmt.Fprintf(out, "%s", content)
+				outputMux.Lock()
+				fmt.Fprintf(outputFilePtr, "%s", content)
+				outputMux.Unlock()
 			}
 		}
 
@@ -352,22 +368,35 @@ func OneSecondDispatch() {
 		case <-ch:
 			tokenCountdownMux.Lock()
 			tokenTimeLeft = -1
-			// hourlyTimeLeft = 2
+			hourlyTimeLeft = 2
 			tokenCountdownMux.Unlock()
-			// proxyApi.GuranteeCurrentToken()
 
 		case <-timeout:
 			tokenCountdownMux.Lock()
 			tokenTimeLeft--
-			// hourlyTimeLeft--
+			hourlyTimeLeft--
 			tokenCountdownMux.Unlock()
-			//if hourlyTimeLeft < 0 {
-			//	tokenCountdownMux.Lock()
-			//	hourlyTimeLeft = 3600
-			//	tokenCountdownMux.Unlock()
-			//	go RunHourlyProcessing()
-			//}
+			if hourlyTimeLeft < 0 {
+				tokenCountdownMux.Lock()
+				hourlyTimeLeft = 3600
+				tokenCountdownMux.Unlock()
+				go RunHourlyProcessing()
+			}
 		}
+	}
+}
+
+var nHoursLeft int = 24
+
+func RunHourlyProcessing() {
+	tokenCountdownMux.Lock()
+	nHoursLeft--
+	tokenCountdownMux.Unlock()
+	if nHoursLeft < 0 {
+		tokenCountdownMux.Lock()
+		nHoursLeft = *RotateHours
+		tokenCountdownMux.Unlock()
+		RotateLogs()
 	}
 }
 
@@ -387,6 +416,44 @@ func SendTimeout() {
 
 func SendKick() {
 	ch <- "kick" // on control-channel - send "kick"
+}
+
+func RotateLogs() {
+	fmt.Printf("Rotate Logs Now \n")
+
+	// var RotateTemplate = flag.String("rotate-template", "./t1/logfile.%{timestamp%}.log.enc", "Template for output file name")
+	// var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
+
+	var err error
+
+	t := time.Now()
+
+	// generate new template (time stuff)
+	mdata := make(map[string]string)
+	mdata["timestamp"] = t.Format(time.RFC3339)
+	newFn := filelib.Qt(*RotateTemplate, mdata)
+
+	outputMux.Lock()
+
+	outputFilePtr.Close()
+
+	err = os.Rename(*output, newFn) // 	rename existing file to be template-generated name
+	if err != nil {
+		outputMux.Unlock()
+		fmt.Fprintf(os.Stderr, "Unable to rename %s to %s: %s\n", *output, newFn, err)
+		os.Exit(1)
+	}
+
+	outputFilePtr, err = filelib.Fopen(*output, "w")
+	if err != nil {
+		outputMux.Unlock()
+		fmt.Fprintf(os.Stderr, "Unable to open %s for output: %s\n", *output, err)
+		os.Exit(1)
+	}
+
+	outputMux.Unlock()
+
+	// TODO run script
 }
 
 const db7 = false

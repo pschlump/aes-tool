@@ -51,24 +51,19 @@ var debugFlag = flag.String("debug-flag", "", "enable debug flags")
 var controlInterface = flag.String("control-interface", "", "turn on HTTP control interface")
 var Dir = flag.String("dir", "./www", "directory to server static files from")
 
-var ch chan string
-var timeout chan string
+// file-pattern/name-template for generating new log files during rotation.
+// 		Date Time - in order
 
-// var timeout chan string
-// var ch chan string
-var tokenCountdownMux *sync.Mutex
-var tokenTimeLeft int
+// script to run to backup/cleanup files after rotation.
+
+var ch chan string = make(chan string, 1)
+var timeout chan string = make(chan string, 2)
+var tokenTimeLeft int = 1
 var n_tick int = 0
 var hourlyTimeLeft int = 3600
 var httpServerList []*http.Server
-
-func init() {
-	ch = make(chan string, 1)
-	timeout = make(chan string, 2)
-	tokenTimeLeft = 1
-	timeout = make(chan string, 1)
-	tokenCountdownMux = &sync.Mutex{}
-}
+var out *os.File = os.Stdout
+var tokenCountdownMux *sync.Mutex = &sync.Mutex{}
 
 func main() {
 	flag.Usage = func() {
@@ -113,7 +108,6 @@ func main() {
 	// -------------------------------------------------------------------------------------------------
 	var keyString string
 	var err error
-	var out *os.File
 
 	if *password == "" || *password == "-" {
 		keyString, err = ReadPassword(*output != "")
@@ -146,7 +140,6 @@ func main() {
 	// -------------------------------------------------------------------------------------------------
 	// Setup output file for non-pipe work.
 	// -------------------------------------------------------------------------------------------------
-	out = os.Stdout
 	if *output != "" && !*pipeInput {
 		out, err = filelib.Fopen(*output, "w")
 		if err != nil {
@@ -347,6 +340,9 @@ func RespHandlerRotateLogs(www http.ResponseWriter, req *http.Request) {
 
 	www.WriteHeader(http.StatusOK) // 200
 	fmt.Fprintf(www, `{"status":"not-implemented-yet"}`)
+
+	// This is the file to rotate.
+	// var out *os.File = os.Stdout
 }
 
 // OneSecondDispatch waits for a "kick" or a timeout and calls QrGenerate forever.

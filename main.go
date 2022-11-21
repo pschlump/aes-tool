@@ -7,14 +7,11 @@ package main
 // mac/linux
 //   $ mkfifo Nmae
 
-// TODO - implement log rotation
+// TODO File Retention
+// Script run to do retention
 
-// TODO - implement a HTTP control interface
-//		--control-interface 127.0.0.1:14202
-//		Starts system with an api of
-//			/api/v1/status
-//			/api/v1/exit-server
-//			/api/v1/rotate-logs-now
+// TODO Copy to S3 for backup
+// Script run to do copy
 
 import (
 	"bufio"
@@ -63,6 +60,7 @@ var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", 
 
 var ch chan string = make(chan string, 1)
 var timeout chan string = make(chan string, 2)
+var wg sync.WaitGroup
 var tokenTimeLeft int = 1
 var n_tick int = 0
 var hourlyTimeLeft int = 3600
@@ -161,6 +159,12 @@ func main() {
 		defer outputFilePtr.Close()
 	}
 
+	// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+	if DbOn["rotate-logs"] {
+		RotateLogs()
+		os.Exit(1)
+	}
+
 	// -------------------------------------------------------------------------------------------------
 	// control interface (really only practical with ReadPipeForever)
 	// -------------------------------------------------------------------------------------------------
@@ -182,6 +186,9 @@ func main() {
 		signal.Notify(stop, os.Interrupt)
 
 		go func() {
+			if DbOn["server-only"] {
+				wg.Add(1)
+			}
 			mux := http.NewServeMux()
 
 			mux.HandleFunc("/api/status", RespHandlerStatus)
@@ -220,6 +227,10 @@ func main() {
 			}
 		}
 
+	}
+
+	if DbOn["server-only"] {
+		wg.Wait()
 	}
 
 	// -------------------------------------------------------------------------------------------------
@@ -419,10 +430,9 @@ func SendKick() {
 }
 
 func RotateLogs() {
-	fmt.Printf("Rotate Logs Now \n")
+	fmt.Printf("Rotate Logs Now\n")
 
 	// var RotateTemplate = flag.String("rotate-template", "./t1/logfile.%{timestamp%}.log.enc", "Template for output file name")
-	// var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
 
 	var err error
 
@@ -431,6 +441,9 @@ func RotateLogs() {
 	// generate new template (time stuff)
 	mdata := make(map[string]string)
 	mdata["timestamp"] = t.Format(time.RFC3339)
+	// IP address
+	// Host name
+	// Read config file for data
 	newFn := filelib.Qt(*RotateTemplate, mdata)
 
 	outputMux.Lock()
@@ -453,7 +466,13 @@ func RotateLogs() {
 
 	outputMux.Unlock()
 
-	// TODO run script
+	// var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
+
+	out, err := RunCmdImpl(*BackupScript, []string{*output, newFn})
+
+	dbgo.Printf("%s %s\n", out, err)
+
+	fmt.Printf("Rotate Logs End\n")
 }
 
 const db7 = false

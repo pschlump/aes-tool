@@ -1,4 +1,4 @@
 #!/bin/bash
 
-echo "OK"
+echo "OK:" $*
 

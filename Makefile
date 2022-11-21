@@ -71,3 +71,13 @@ my_target: export MY_VAR_3 = baz
 my_target: 
 	./show-env.sh
 
+rotate_logs_test: export AES_TOOL_PASSWORD = "Humpty Dumpty"
+rotate_logs_test:
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./t1/logfile-rtate-current.txt.enc --password "#env#AES_TOOL_PASSWORD" \
+		--debug-flag "rotate-logs"  
+
+server_test: export AES_TOOL_PASSWORD = "Humpty Dumpty"
+server_test:
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./t1/logfile-rtate-current.txt.enc --password "#env#AES_TOOL_PASSWORD" \
+		--debug-flag "server-only" --control-interface 127.0.0.1:14000
+

@@ -1,27 +1,41 @@
 package main
 
-// TODO - allow use of named pipe.
-// https://github.com/nknorg/encrypted-stream
-// https://tutorialedge.net/golang/go-encrypt-decrypt-aes-tutorial/
+// DONE - allow use of named pipe.
+// 	https://github.com/nknorg/encrypted-stream
+// 	https://tutorialedge.net/golang/go-encrypt-decrypt-aes-tutorial/
 //
-// mac
+// mac/linux
 //   $ mkfifo Nmae
 
 // TODO - implement log rotation
 
+// TODO - implement a HTTP control interface
+//		--control-interface 127.0.0.1:14202
+//		Starts system with an api of
+//			/api/v1/status
+//			/api/v1/exit-server
+//			/api/v1/rotate-logs-now
+
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
+	"github.com/pschlump/dbgo"
 	"github.com/pschlump/filelib"
 	"github.com/pschlump/qr-secret/enc"
 	"golang.org/x/term"
@@ -34,6 +48,26 @@ var output = flag.String("output", "", "file to send output to")
 var password = flag.String("password", "", "file read password from")
 var help = flag.Bool("help", false, "print out usage message")
 var debugFlag = flag.String("debug-flag", "", "enable debug flags")
+var controlInterface = flag.String("control-interface", "", "turn on HTTP control interface")
+var Dir = flag.String("dir", "./www", "directory to server static files from")
+
+var ch chan string
+var timeout chan string
+
+// var timeout chan string
+// var ch chan string
+var tokenCountdownMux *sync.Mutex
+var tokenTimeLeft int
+var n_tick int = 0
+var hourlyTimeLeft int = 3600
+
+func init() {
+	ch = make(chan string, 1)
+	timeout = make(chan string, 2)
+	tokenTimeLeft = 1
+	timeout = make(chan string, 1)
+	tokenCountdownMux = &sync.Mutex{}
+}
 
 func main() {
 	flag.Usage = func() {
@@ -66,13 +100,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	var keyString string
-	var err error
-	var out *os.File
+	// -------------------------------------------------------------------------------------------------
+	// save pidfile.
+	// -------------------------------------------------------------------------------------------------
+	pid := os.Getpid()
+	os.MkdirAll("./aes-tool-log", 0755)
+	ioutil.WriteFile("./aes-tool-log/pidfile.log", []byte(fmt.Sprintf("%d\n", pid)), 0644)
 
 	// -------------------------------------------------------------------------------------------------
 	// Get Password / Passphrase
 	// -------------------------------------------------------------------------------------------------
+	var keyString string
+	var err error
+	var out *os.File
+
 	if *password == "" || *password == "-" {
 		keyString, err = ReadPassword(*output != "")
 		if err != nil {
@@ -112,6 +153,38 @@ func main() {
 			os.Exit(1)
 		}
 		defer out.Close()
+	}
+
+	// -------------------------------------------------------------------------------------------------
+	// control interface (really only practical with ReadPipeForever)
+	// -------------------------------------------------------------------------------------------------
+	if *controlInterface != "" {
+		dbgo.Fprintf(os.Stderr, "%(green)Control Interface Enabled. Listing at http://%s\n", *controlInterface)
+		go func() {
+
+			// ------------------------------------------------------------------------------
+			// Main Processing
+			// ------------------------------------------------------------------------------
+			// go TimedDispatch()
+			go OneSecondDispatch()
+
+			// ticker on channel - send once a minute
+			Start1SecTimer()
+
+			// ------------------------------------------------------------------------------
+			// Setup signal capture
+			// ------------------------------------------------------------------------------
+			stop := make(chan os.Signal, 1)
+			signal.Notify(stop, os.Interrupt)
+
+			http.HandleFunc("/api/status", RespHandlerStatus)
+			http.HandleFunc("/api/v1/status", RespHandlerStatus)
+			http.HandleFunc("/api/v1/exit-server", RespHandleExitServer)
+			http.HandleFunc("/api/v1/rotate-logs", RespHandlerRotateLogs)
+			http.Handle("/", http.FileServer(http.Dir(*Dir)))
+
+			log.Fatal(http.ListenAndServe(*controlInterface, nil))
+		}()
 	}
 
 	// -------------------------------------------------------------------------------------------------
@@ -215,6 +288,98 @@ func ReadPassword(prompt bool) (password string, err error) {
 	}
 
 	return strings.TrimSpace(password), nil
+}
+
+// RespHandlerStatus reports a JSON status.
+func RespHandlerStatus(www http.ResponseWriter, req *http.Request) {
+	q := req.RequestURI
+
+	var rv string
+	www.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rv = fmt.Sprintf(`{"status":"success","name":"aes-tool version 1.0.0","URI":%q,"req":%s, "response_header":%s}`, q, dbgo.SVarI(req), dbgo.SVarI(www.Header()))
+
+	io.WriteString(www, rv)
+}
+
+const shutdownWaitTime = 1
+
+// HandleExitServer - graceful server shutdown.
+func RespHandleExitServer(www http.ResponseWriter, req *http.Request) {
+	pid := os.Getpid()
+	//if ymux.IsTLS(req) {
+	//	www.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+	//}
+	www.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	www.WriteHeader(http.StatusOK) // 200
+	fmt.Fprintf(www, `{"status":"success", "pid":%v}`, pid)
+
+	go func() {
+		// Implement graceful exit with auth_key
+		fmt.Fprintf(os.Stderr, "\nShutting down the server... Received /exit-server?auth_key=...\n")
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime*time.Second)
+		defer cancel()
+		_ = ctx
+		/*xyzzy
+		err := httpServer.Shutdown(ctx)
+		if err != nil {
+			fmt.Printf("Error on shutdown: [%s]\n", err)
+		}
+		*/
+	}()
+}
+
+//			http.HandleFunc("/api/v1/rotate-logs", RespHandlerRotateLogs)
+func RespHandlerRotateLogs(www http.ResponseWriter, req *http.Request) {
+	// TODO ---------------------------------------------------------------------------------------------------------------
+	www.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	www.WriteHeader(http.StatusOK) // 200
+	fmt.Fprintf(www, `{"status":"not-implemented-yet"}`)
+}
+
+// OneSecondDispatch waits for a "kick" or a timeout and calls QrGenerate forever.
+func OneSecondDispatch() {
+	for {
+		select {
+		case <-ch:
+			tokenCountdownMux.Lock()
+			tokenTimeLeft = -1
+			// hourlyTimeLeft = 2
+			tokenCountdownMux.Unlock()
+			// proxyApi.GuranteeCurrentToken()
+
+		case <-timeout:
+			tokenCountdownMux.Lock()
+			tokenTimeLeft--
+			// hourlyTimeLeft--
+			tokenCountdownMux.Unlock()
+			//if hourlyTimeLeft < 0 {
+			//	tokenCountdownMux.Lock()
+			//	hourlyTimeLeft = 3600
+			//	tokenCountdownMux.Unlock()
+			//	go RunHourlyProcessing()
+			//}
+		}
+	}
+}
+
+func Start1SecTimer() {
+	// ticker on channel - send once a second
+	go func(n int) {
+		for {
+			time.Sleep(time.Duration(n) * time.Second)
+			SendTimeout() // timeout <- "timeout"
+		}
+	}(1)
+}
+
+func SendTimeout() {
+	timeout <- "timeout"
+}
+
+func SendKick() {
+	ch <- "kick" // on control-channel - send "kick"
 }
 
 const db7 = false

@@ -8,10 +8,9 @@ package main
 //   $ mkfifo Nmae
 
 // TODO File Retention
-// Script run to do retention
-
 // TODO Copy to S3 for backup
-// Script run to do copy
+// 		Script run to do retention
+// 		Script run to do copy
 
 import (
 	"bufio"
@@ -47,7 +46,6 @@ var help = flag.Bool("help", false, "print out usage message")
 var debugFlag = flag.String("debug-flag", "", "enable debug flags")
 var controlInterface = flag.String("control-interface", "", "turn on HTTP control interface")
 var Dir = flag.String("dir", "./www", "directory to server static files from")
-
 var RotateHours = flag.Int("rotate-hours", 24, "how often to roate log files")
 var RotateTemplate = flag.String("rotate-template", "./t1/logfile.%{timestamp%}.log.enc", "Template for output file name")
 var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
@@ -56,14 +54,15 @@ var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", 
 // 		Date Time - in order
 
 // script to run to backup/cleanup files after rotation.
-//	./bin/backup-lo9g-files.sh "Path-To-Log-Files", "pattern-to-match"
+//		./bin/backup-log-files.sh "Path-To-Log-Files", "pattern-to-match"
 
 var ch chan string = make(chan string, 1)
 var timeout chan string = make(chan string, 2)
 var wg sync.WaitGroup
 var tokenTimeLeft int = 1
 var n_tick int = 0
-var hourlyTimeLeft int = 3600
+var oneHourInSeconds = 3600
+var hourlyTimeLeft int = oneHourInSeconds
 var httpServerList []*http.Server
 var outputFilePtr *os.File = os.Stdout
 var tokenCountdownMux *sync.Mutex = &sync.Mutex{}
@@ -143,6 +142,10 @@ func main() {
 		}
 	}
 
+	if DbOn["log-rotate-test"] {
+		oneHourInSeconds = 10
+	}
+
 	// -------------------------------------------------------------------------------------------------
 	// Setup output file for non-pipe work.
 	// -------------------------------------------------------------------------------------------------
@@ -210,26 +213,30 @@ func main() {
 			log.Fatal(httpServer.ListenAndServe())
 		}()
 
-		// ------------------------------------------------------------------------------
-		// Catch signals from [Control-C]
-		// ------------------------------------------------------------------------------
-		select {
-		case <-stop:
-			fmt.Fprintf(os.Stderr, "\nShutting down the server... Received OS Signal...\n")
-			// fmt.Fprintf(logFilePtr, "\nShutting down the server... Received OS Signal...\n")
-			for _, httpServer := range httpServerList {
-				ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime*time.Second)
-				defer cancel()
-				err := httpServer.Shutdown(ctx)
-				if err != nil {
-					fmt.Printf("Error on shutdown: [%s]\n", err)
+		go func() {
+			// ------------------------------------------------------------------------------
+			// Catch signals from [Control-C]
+			// ------------------------------------------------------------------------------
+			select {
+			case <-stop:
+				fmt.Fprintf(os.Stderr, "\nShutting down the server... Received OS Signal...\n")
+				// fmt.Fprintf(logFilePtr, "\nShutting down the server... Received OS Signal...\n")
+				for _, httpServer := range httpServerList {
+					ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime*time.Second)
+					defer cancel()
+					err := httpServer.Shutdown(ctx)
+					if err != nil {
+						fmt.Printf("Error on shutdown: [%s]\n", err)
+					}
 				}
+				os.Exit(0)
 			}
-		}
+		}()
 
 	}
 
 	if DbOn["server-only"] {
+		dbgo.Printf("Waiting for serer only %(LF)\n")
 		wg.Wait()
 	}
 
@@ -238,6 +245,7 @@ func main() {
 	// -------------------------------------------------------------------------------------------------
 	if *pipeInput && *encode != "" {
 
+		dbgo.Printf("Forever read loop on pipe %(LF)\n")
 		//		        In(pipe) Out(encrypted)
 		ReadPipeForever(*encode, keyString)
 
@@ -362,12 +370,12 @@ func RespHandleExitServer(www http.ResponseWriter, req *http.Request) {
 
 //			http.HandleFunc("/api/v1/rotate-logs", RespHandlerRotateLogs)
 func RespHandlerRotateLogs(www http.ResponseWriter, req *http.Request) {
-	// TODO ---------------------------------------------------------------------------------------------------------------
 	www.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	www.WriteHeader(http.StatusOK) // 200
 	fmt.Fprintf(www, `{"status":"not-implemented-yet"}`)
 
+	// TODO ---------------------------------------------------------------------------------------------------------------
 	// This is the file to rotate.
 	// var out *os.File = os.Stdout
 }
@@ -389,7 +397,7 @@ func OneSecondDispatch() {
 			tokenCountdownMux.Unlock()
 			if hourlyTimeLeft < 0 {
 				tokenCountdownMux.Lock()
-				hourlyTimeLeft = 3600
+				hourlyTimeLeft = oneHourInSeconds
 				tokenCountdownMux.Unlock()
 				go RunHourlyProcessing()
 			}
@@ -433,7 +441,6 @@ func RotateLogs() {
 	fmt.Printf("Rotate Logs Now\n")
 
 	// var RotateTemplate = flag.String("rotate-template", "./t1/logfile.%{timestamp%}.log.enc", "Template for output file name")
-
 	var err error
 
 	t := time.Now()
@@ -466,15 +473,18 @@ func RotateLogs() {
 
 	outputMux.Unlock()
 
-	// var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
+	if *BackupScript != "" {
 
-	out, err := RunCmdImpl(*BackupScript, []string{*output, newFn})
+		// var BackupScript = flag.String("backup-log-files", "./bin/backup-log-files.sh", "Script to run to backup log files")
+		out, err := RunCmdImpl(*BackupScript, []string{*output, newFn})
 
-	dbgo.Printf("%s %s\n", out, err)
+		dbgo.Printf("%s %s\n", out, err)
+
+	}
 
 	fmt.Printf("Rotate Logs End\n")
 }
 
-const db7 = false
+// const db7 = false
 
 /* vim: set noai ts=4 sw=4: */

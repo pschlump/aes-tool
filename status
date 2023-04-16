@@ -1,0 +1,51 @@
+{"status":"success","name":"aes-tool version 1.0.0","URI":"/api/v1/status","req":{
+	"Method": "GET",
+	"URL": {
+		"Scheme": "",
+		"Opaque": "",
+		"User": null,
+		"Host": "",
+		"Path": "/api/v1/status",
+		"RawPath": "",
+		"ForceQuery": false,
+		"RawQuery": "",
+		"Fragment": "",
+		"RawFragment": ""
+	},
+	"Proto": "HTTP/1.1",
+	"ProtoMajor": 1,
+	"ProtoMinor": 1,
+	"Header": {
+		"Accept": [
+			"*/*"
+		],
+		"Accept-Encoding": [
+			"identity"
+		],
+		"Connection": [
+			"Keep-Alive"
+		],
+		"User-Agent": [
+			"Wget/1.21.3"
+		]
+	},
+	"Body": {},
+	"GetBody": "json: unsupported type: func() (io.ReadCloser, error)",
+	"ContentLength": 0,
+	"TransferEncoding": null,
+	"Close": false,
+	"Host": "127.0.0.1:14000",
+	"Form": null,
+	"PostForm": null,
+	"MultipartForm": null,
+	"Trailer": null,
+	"RemoteAddr": "127.0.0.1:55076",
+	"RequestURI": "/api/v1/status",
+	"TLS": null,
+	"Cancel": "json: unsupported type: <-chan struct {}",
+	"Response": null
+}, "response_header":{
+	"Content-Type": [
+		"application/json; charset=utf-8"
+	]
+}}

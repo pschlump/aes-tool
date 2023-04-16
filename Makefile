@@ -81,3 +81,22 @@ server_test:
 	./aes-tool --encode ./t1/data.txt --pipe-input --output ./t1/logfile-rtate-current.txt.enc --password "#env#AES_TOOL_PASSWORD" \
 		--debug-flag "server-only" --control-interface 127.0.0.1:14000
 
+log_rotate_test: export AES_TOOL_PASSWORD = "Humpty Dumpty"
+log_rotate_test:
+	go build
+	./create-named-pipe.sh ./t1/data.txt
+	sleep 1
+	./aes-tool --encode ./t1/data.txt --pipe-input --output ./t1/logfile-rtate-current.txt.enc --password "#env#AES_TOOL_PASSWORD" \
+		--debug-flag "log-rotate-test" --control-interface 127.0.0.1:14000 --rotate-hours 1 &
+	sleep 1
+	ls -l ./testdata >t1/data.txt
+	sleep 11
+	ls -l ./testdata >t1/data.txt
+	sleep 11
+	ls -l ./testdata >t1/data.txt
+	sleep 11
+	ls -l ./testdata >t1/data.txt
+	sleep 11
+	cat /tmp/,v
+
+
